@@ -55,8 +55,6 @@ void EventDisplayer::drawDisplay(marlin::Processor* proc, EVENT::LCEvent* evt, F
     
     DDMarlinCED::newEvent(proc, evt);
     DDMarlinCED::drawDD4hepDetector(_detector, false, std::vector<std::string>{""});
-    DDCEDPickingHandler& pHandler= DDCEDPickingHandler::getInstance();
-    pHandler.update(evt);
 
     func(std::forward<Args>(args)...);
 
