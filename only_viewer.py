@@ -1,6 +1,4 @@
 import os
-import sys
-from pathlib import Path
 
 from Configurables import (
     ApplicationMgr,
@@ -11,18 +9,11 @@ from Configurables import (
     MarlinProcessorWrapper,
     PodioInput,
     PodioOutput,
-    TrackingCellIDEncodingSvc,
     k4DataSvc,
 )
 from Gaudi.Configuration import DEBUG, INFO
-
-try:
-    from k4FWCore.utils import SequenceLoader, import_from
-except ImportError:
-    from py_utils import import_from, SequenceLoader
-
 from k4FWCore.parseArgs import parser
-from k4MarlinWrapper.parseConstants import parseConstants
+from k4MarlinWrapper.inputReader import attach_edm4hep2lcio_conversion, create_reader
 
 # only non-FCCMDI models, later FCCMDI models are added to this tuple
 DETECTOR_MODELS = (
@@ -60,7 +51,7 @@ parser.add_argument(
     "--inputFiles",
     action="extend",
     nargs="+",
-    metavar=["file1", "file2"],
+    metavar=("file1", "file2"),
     help="One or multiple input files",
 )
 parser.add_argument(
@@ -95,57 +86,12 @@ geoSvc.OutputLevel = INFO
 geoSvc.EnableGeant4Geo = False
 svcList.append(geoSvc)
 
-cellIDSvc = TrackingCellIDEncodingSvc("CellIDSvc")
-cellIDSvc.EncodingStringParameterName = "GlobalTrackerReadoutID"
-cellIDSvc.GeoSvcName = geoSvc.name()
-cellIDSvc.OutputLevel = INFO
-svcList.append(cellIDSvc)
-
-
-def create_reader(input_files):
-    """Create the appropriate reader for the input files"""
-    if input_files[0].endswith(".slcio"):
-        if any(not f.endswith(".slcio") for f in input_files):
-            print("All input files need to have the same format (LCIO)")
-            sys.exit(1)
-
-        read = LcioEvent()
-        read.Files = input_files
-    else:
-        if any(not f.endswith(".root") for f in input_files):
-            print("All input files need to have the same format (EDM4hep)")
-            sys.exit(1)
-        read = PodioInput("PodioInput")
-        global evtsvc
-        evtsvc.inputs = input_files
-
-    return read
-
-
 if reco_args.inputFiles:
-    read = create_reader(reco_args.inputFiles)
+    read = create_reader(reco_args.inputFiles, evtsvc)
     read.OutputLevel = INFO
     algList.append(read)
 else:
     read = None
-
-
-MyAIDAProcessor = MarlinProcessorWrapper("MyAIDAProcessor")
-MyAIDAProcessor.OutputLevel = INFO
-MyAIDAProcessor.ProcessorType = "AIDAProcessor"
-MyAIDAProcessor.Parameters = {
-    "Compress": ["1"],
-    "FileType": ["root"],
-}
-algList.append(MyAIDAProcessor)
-
-# We need to convert the inputs in case we have EDM4hep input
-if isinstance(read, PodioInput):
-    EDM4hep2LcioInput = EDM4hep2LcioTool("InputConversion")
-    EDM4hep2LcioInput.convertAll = True
-    # Adjust for the different naming conventions
-    EDM4hep2LcioInput.collNameMapping = {"MCParticles": "MCParticle"}
-    MyAIDAProcessor.EDM4hep2LcioTool = EDM4hep2LcioInput
 
 
 MyStatusmonitor = MarlinProcessorWrapper("MyStatusmonitor")
@@ -157,9 +103,11 @@ algList.append(MyStatusmonitor)
 MyViewer = MarlinProcessorWrapper("MyViewerProc")
 MyViewer.OutputLevel = INFO
 MyViewer.ProcessorType = "MyViewerProc"
-MyViewer.Parameters = {"eventDisplay":["true"]}
+MyViewer.Parameters = {"eventDisplay": ["true"]}
 
 algList.append(MyViewer)
+
+attach_edm4hep2lcio_conversion(algList, read)
 
 ApplicationMgr(
     TopAlg=algList, EvtSel="NONE", EvtMax=3, ExtSvc=svcList, OutputLevel=INFO

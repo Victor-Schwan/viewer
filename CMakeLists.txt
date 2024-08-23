@@ -11,7 +11,10 @@ set(CMAKE_BUILD_TYPE Debug)
 
 
 include_directories(${PROJECT_SOURCE_DIR}/include)
-add_library(${PROJECT_NAME} SHARED ${PROJECT_SOURCE_DIR}/src/MyViewerProc.cc)
+add_library(${PROJECT_NAME} SHARED
+    ${PROJECT_SOURCE_DIR}/src/MyViewerProc.cc
+    ${PROJECT_SOURCE_DIR}/src/utils.cc
+)
 
 ### DEPENDENCIES ###
 find_package(Marlin REQUIRED)
